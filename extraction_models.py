@@ -6,11 +6,16 @@ from pydantic import BaseModel, ConfigDict
 class ExtractionModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
+class Package(ExtractionModel):
+    type: str
+    code: str
+    qty: str
 
 class InvoiceItem(ExtractionModel):
     number: str
     name: str
     qty: str
+    package: Package
     unit_price: str
     total_price: str
 
@@ -22,12 +27,8 @@ class CommercialInvoice(ExtractionModel):
     freight_amount: str
     line_items: list[InvoiceItem]
     serial_number: str
+    extracted_remarks: str
 
-
-class Package(ExtractionModel):
-    type: str
-    code: str
-    qty: str
 
 
 class PackingItem(ExtractionModel):
@@ -42,6 +43,7 @@ class PackingItem(ExtractionModel):
 class PackingList(ExtractionModel):
     line_items: list[PackingItem]
     total_containers_x_size: list[str]
+    extracted_remarks: str
 
 
 class Party(ExtractionModel):
@@ -55,6 +57,7 @@ class CertificateOfOrigin(ExtractionModel):
     serial_number: str
     consignor: Party
     consignee: Party
+    extracted_remarks: str
 
 
 class ExtractedEntryDocuments(ExtractionModel):
