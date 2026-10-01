@@ -2,7 +2,7 @@
 
 ## Objective
 
-Extract information from the supplied commercial invoice, packing list, and certificate of origin into one combined `extracted_entry_docs.json` file.
+Extract information from the supplied commercial invoice, packing list, certificate of origin, and import declaration form into one combined `extracted_entry_docs.json` file.
 
 Accuracy takes priority over completeness. Never invent a value to fill a field. This task extracts information; it does not submit a customs declaration or modify any external system.
 
@@ -121,7 +121,47 @@ Write exactly these keys in `extracted_entry_docs.json`. The objects inside the 
       "country_code": ""
     },
     "extraction_remarks": ""
+  },
+  "import_declaration_form": {
+    "no": "",
+    "pin": "",
+    "incoterm": "",
+    "importer": {
+        "name": "",
+        "address": "",
+        "county_code": ""
+    },
+    "seller": {
+        "name": "",
+        "address": ""
+    },
+    "mode_of_transport": {
+        "name": "",
+        "code": ""
+    },
+    "line_items": [
+      {
+        "number": "",
+        "name": "",
+        "qty": "",
+        "qty_unit": "",
+        "origin": "",
+        "hs_code": "",
+        "net_mass": "",
+        "fob_value": ""
+      }
+    ],
+    "extraction_remarks": ""
+  },
+  "bill_of_lading": {
+      "no": "",
+      "place_of_delivery": "",
+      "port_of_discharge":"",
+      "vessel": "",
+      "voyage_no": "",
+      "extraction_remarks": ""
   }
+
 }
 
 ```
@@ -266,7 +306,201 @@ invoice and packing list:
 - The application structure has no goods-origin field. Never substitute consignor country for goods origin.
 - `extraction_remarks`: Apply the shared Extraction remarks rules.
 
+### Import Declaration Form
+
+Extract `import_declaration_form` from the supplied IDF, including
+all continuation pages. Do not populate its fields from the invoice,
+packing list, or certificate of origin.
+
+- `no`: Extract the IDF number labeled "No". Do not substitute
+  the UCR number, referenced invoice number, or form designation
+  such as "FORM C.61 A".
+
+- `pin`: Extract the PIN belonging to the importer. Do not use
+  the seller's PIN or a PIN embedded in another identifier.
+
+- `incoterm`: Extract the explicitly stated Incoterm as an
+  uppercase code. Do not confuse it with payment terms under
+  "Transaction Terms".
+
+- `importer.name` and `importer.address`: Extract the legal name
+  and full address from "Importer Name & Address". Keep contact
+  names, email addresses, and telephone numbers out of these fields.
+
+- `importer.county_code`: Identify the Kenyan county from the importer's address, then map it to its official two-digit county code using the below list of county codes. Preserve leading zeros.
+  - This is an explicitly permitted geographic inference. Infer the county only when the address identifies a location that can be mapped unambiguously.
+```json
+{
+  "Mombasa": "01",
+  "Kwale": "02",
+  "Kilifi": "03",
+  "Tana River": "04",
+  "Lamu": "05",
+  "Taita Taveta": "06",
+  "Garissa": "07",
+  "Wajir": "08",
+  "Mandera": "09",
+  "Marsabit": "10",
+  "Isiolo": "11",
+  "Meru": "12",
+  "Tharaka Nithi": "13",
+  "Embu": "14",
+  "Kitui": "15",
+  "Machakos": "16",
+  "Makueni": "17",
+  "Nyandarua": "18",
+  "Nyeri": "19",
+  "Kirinyaga": "20",
+  "Murang'a": "21",
+  "Kiambu": "22",
+  "Turkana": "23",
+  "West Pokot": "24",
+  "Samburu": "25",
+  "Trans Nzoia": "26",
+  "Uasin Gishu": "27",
+  "Elgeyo Marakwet": "28",
+  "Nandi": "29",
+  "Baringo": "30",
+  "Laikipia": "31",
+  "Nakuru": "32",
+  "Narok": "33",
+  "Kajiado": "34",
+  "Kericho": "35",
+  "Bomet": "36",
+  "Kakamega": "37",
+  "Vihiga": "38",
+  "Bungoma": "39",
+  "Busia": "40",
+  "Siaya": "41",
+  "Kisumu": "42",
+  "Homa Bay": "43",
+  "Migori": "44",
+  "Kisii": "45",
+  "Nyamira": "46",
+  "Nairobi": "47"
+}
+```
+
+- `seller.name` and `seller.address`: Extract the legal name and
+  full address from "Seller Name & Address". Do not substitute
+  the seller's contact person.
+
+- `mode_of_transport.name`: Extract the explicitly stated mode,
+  such as "Sea transport". Do not infer it from a port or route.
+
+- `mode_of_transport.code`: Using the mode_of_transport.name obtained above, map it to its official digit code using the below list of tranport codes:
+```json
+{
+  "1": "Sea transport",
+  "2": "Rail transport",
+  "3": "Road transport",
+  "4": "Air transport",
+  "5": "Postal consignment",
+  "6": "Chartered Flights",
+  "7": "Fixed transport installations",
+  "8": "Inland waterway transport",
+  "9": "Other"
+}
+```
+
+- `line_items[].number`: Preserve the printed IDF item number.
+  If item numbers are absent throughout the table, generate
+  sequential strings starting at "1". Do not restart numbering
+  on continuation pages.
+
+- `line_items[].name`: Extract the complete text in "Full
+  description and application", preserving brands, sizes,
+  models, and other printed specifications. Join wrapped text
+  and page-spanning continuations to the correct item.
+  Do not include values from adjacent columns.
+
+- `line_items[].qty`: Extract the value in the dedicated
+  "Quantity/supplementary" column, in its declared unit.
+  Do not substitute a quantity embedded in the description
+  or the value in the net-mass column.
+  A declared quantity may represent a measurement rather
+  than a count of pieces. Preserve fractional quantities.
+
+- `line_items[].qty_unit`: Extract the unit associated with the
+  declared quantity from the dedicated "Unit of" column.
+  Preserve the printed code, such as "UNT" or "KGM", in uppercase.
+  Do not replace it with a unit mentioned in the product description,
+  infer it from the product, or apply package-type mappings.
+  If the unit is missing or unclear, leave it blank.
+
+- `line_items[].origin`: Extract the item's origin from its
+  "Origin" column. Preserve a printed country code in uppercase.
+  If a country name is printed instead, map it to ISO 3166-1
+  alpha-2 only when unambiguous.
+  Do not substitute Country of Supply, seller location,
+  or importer country.
+
+- `line_items[].hs_code`: Extract the code printed in the
+  item's "HS Code" column as a string, preserving leading
+  zeros and its printed precision. Do not classify the goods,
+  correct the code, or replace it using another document.
+
+- `line_items[].net_mass`: Extract the item's total net mass
+  from the dedicated net-mass column, in kilograms.
+  Convert only when the source unit is explicit and the
+  conversion is unambiguous. Do not use an individual item's
+  weight embedded in the description or calculate a total.
+
+- `line_items[].fob_value`: Extract the printed FOB value
+  for that row. Do not use the shipment-level FOB total,
+  calculate a missing value, or perform currency conversion.
+
+- Preserve each IDF row independently, even when tyres, tubes,
+  and flaps are grouped as a set in another document.
+  Do not merge rows to match the invoice or packing list.
+
+- Exclude repeated headers, shipment totals, observations,
+  declarations, and official-use sections from line_items.
+
+- `extraction_remarks`: Apply the shared Extraction remarks
+  rules. Preserve each row's declared quantity unit in `qty_unit`.
+
+### Bill of lading
+
+Extract `bill_of_lading` from the supplied bill of lading,
+including any continuation pages.
+
+- `no`: Extract the number explicitly labeled "Bill of Lading No.",
+  "B/L No.", or an equivalent label. Preserve leading zeros and
+  meaningful punctuation. Do not substitute the booking number,
+  container number, shipment reference, or seal number.
+
+- `place_of_delivery`: Extract the location explicitly labeled
+  "Place of Delivery" or an equivalent final-delivery field.
+  Do not substitute the port of discharge, place of receipt,
+  or consignee's address. If absent, leave it blank even when
+  the port of discharge is known.
+
+- `port_of_discharge`: Extract the location explicitly labeled
+  "Port of Discharge". Do not substitute the port of loading,
+  a transshipment port, or the place of delivery.
+
+- `vessel`: Extract the vessel name from the main ocean-carriage
+  field, such as "Ocean Vessel" or "Vessel".
+  Do not substitute a vessel listed only under pre-carriage.
+  Where multiple vessels are shown and the main vessel cannot
+  be identified unambiguously, leave the field blank and
+  explain the issue in extraction_remarks.
+
+- `voyage_no`: Extract the voyage number associated with the
+  selected vessel. Preserve leading zeros, letters, and
+  meaningful punctuation. Do not substitute a service name,
+  booking reference, or voyage belonging to another vessel.
+
+- When vessel and voyage appear in a combined field, separate
+  them only when their boundaries are clear. Do not guess
+  whether a number forms part of the vessel name or voyage.
+
+- `extraction_remarks`: Apply the shared Extraction remarks rules.
+
 ## Validation and delivery
+
+Do not generate an extraction report. Record issues in each document's `extraction_remarks` field.
 
 Before delivering:
 
